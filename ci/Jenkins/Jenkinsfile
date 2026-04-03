@@ -1,47 +1,66 @@
 pipeline {
-  agent any
-  parameters {
-    string(name: 'build_version', defaultValue: 'V1.0', description: 'Version Docker')
-  }
-  stages {
-    stage('Build and Test') {
-      steps {
-        sh 'cd demo-java-app && mvn clean package'
-      }
+    agent any
+    parameters {
+        string(name: 'build_version', defaultValue: 'V1.0', description: 'Version de l\'image Docker')
     }
-    stage('Static Code Analysis') {
-      steps {
-        withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
-          sh 'cd demo-java-app && mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=http://sonarqube:9000'
-        }
-      }
-    }
-    stage('Build and Push Docker Image') {
-      environment {
-        DOCKER_IMAGE = "cheikhdou40/demo-java-app:${build_version}"
-      }
-      steps {
-        script {
-            sh 'cd demo-java-app && docker build -t ${DOCKER_IMAGE} .'
-            docker.withRegistry('https://index.docker.io/v1/', "dockerhub") {
-                docker.image("${DOCKER_IMAGE}").push()
+    stages {
+        // ÉTAPE 1 : Apparaît automatiquement (Declarative: Checkout SCM)
+        
+        stage('Checkout') {
+            steps {
+                // ÉTAPE 2 : On force l'affichage de la case Checkout
+                git branch: 'main', url: 'https://github.com/cheikhdou40/devops-demo-project.git'
             }
         }
-      }
-    }
-    stage('Update Deployment File') {
-        steps {
-            withCredentials([string(credentialsId: 'cheikhdou40', variable: 'GITHUB_TOKEN')]) {
-                sh """
-                    git config user.email "cheikhdou40@gmail.com"
-                    git config user.name "cheikhdou40"
-                    sed -i 's/tag: .*/tag: "${build_version}"/' helm/app/values.yaml
-                    git add helm/app/values.yaml
-                    git commit -m "Update version ${build_version}"
-                    git push https://${GITHUB_TOKEN}@github.com/cheikhdieng40/devops-demo-project.git HEAD:main
-                """
+        
+        stage('Build and Test') {
+            steps {
+                // ÉTAPE 3
+                sh 'cd demo-java-app && mvn clean package'
+            }
+        }
+        
+        stage('Static Code Analysis') {
+            steps {
+                // ÉTAPE 4 : Utilise ton ID 'sonarqube'
+                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
+                    sh 'cd demo-java-app && mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN -Dsonar.host.url=http://sonarqube:9000'
+                }
+            }
+        }
+        
+        stage('Build and Push Docker Image') {
+            steps {
+                // ÉTAPE 5
+                script {
+                    def imageName = "cheikhdieng40/demo-java-app:${params.build_version}"
+                    // Correction de l'image de base obsolète
+                    sh "sed -i 's|FROM openjdk.*|FROM eclipse-temurin:17-jdk-jammy|' demo-java-app/Dockerfile"
+                    
+                    // Utilisation de ton Secret Text 'cheikhdou40'
+                    withCredentials([string(credentialsId: 'cheikhdou40', variable: 'DOCKER_TOKEN')]) {
+                        sh "cd demo-java-app && docker build -t ${imageName} ."
+                        sh "echo \$DOCKER_TOKEN | docker login -u cheikhdieng40 --password-stdin"
+                        sh "docker push ${imageName}"
+                    }
+                }
+            }
+        }
+        
+        stage('Update Deployment File') {
+            steps {
+                // ÉTAPE 6 : Utilise ton ID 'github' (ton token perso)
+                withCredentials([string(credentialsId: 'github', variable: 'G_TOKEN')]) {
+                    sh """
+                        git config user.email "cheikhdou40@gmail.com"
+                        git config user.name "cheikhdou40"
+                        sed -i 's/tag: .*/tag: "${params.build_version}"/' helm/app/values.yaml
+                        git add helm/app/values.yaml
+                        git commit -m "Update version ${params.build_version}" || echo "No changes"
+                        git push https://${G_TOKEN}@github.com/cheikhdou40/devops-demo-project.git HEAD:main
+                    """
+                }
             }
         }
     }
-  }
 }
