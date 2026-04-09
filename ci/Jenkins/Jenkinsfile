@@ -26,7 +26,7 @@ pipeline {
                // withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
                   //  sh 'cd demo-java-app && mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN -Dsonar.host.url=http://sonarqube:9000'
                 }
-            }
+            
         }
         
         stage('Build and Push Docker Image') {
